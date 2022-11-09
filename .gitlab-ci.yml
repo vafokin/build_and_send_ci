@@ -1,0 +1,73 @@
+stages:
+  - build
+  - run
+
+variables:
+  IMAGE_DJANGO: "${CI_REGISTRY_IMAGE}:${BRANCH}_DJANGO_${CI_COMMIT_SHORT_SHA}"
+  IMAGE_NGINX: "${CI_REGISTRY_IMAGE}:${BRANCH}_NGINX_${CI_COMMIT_SHORT_SHA}"
+
+before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+build_dev:
+  stage: build
+  tags:
+    - vadeb11_runner
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev"'
+      variables:
+        BRANCH: "app_dev"
+      when: always
+  script:
+    - touch dev_output.txt
+    - cd django1/
+    - docker build -t $IMAGE_DJANGO . >> ../dev_output.txt
+    - docker push $IMAGE_DJANGO
+    - cd ../nginx/
+    - docker build -t $IMAGE_NGINX . >> ../dev_output.txt
+    - docker push $IMAGE_NGINX
+  artifacts:
+    paths:
+      - dev_output.txt
+
+build_prod:
+  stage: build
+  tags:
+    - vadeb11_runner
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      variables:
+        BRANCH: "app_prod"
+      when: always
+  script:
+    - touch prod_output.txt
+    - cd django1/
+    - docker build -t $BUILD_DJANGO . >> ../prod_output.txt
+    - docker push $BUILD_DJANGO
+    - cd ../nginx/
+    - docker build -t $BUILD_NGINX . >> ../prod_output.txt
+    - docker push $BUILD_NGINX
+  artifacts:
+    paths:
+      - prod_output.txt
+   
+run:
+  stage: run
+  tags:
+    - vadeb11_shell
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      variables:
+        BRANCH: "app_prod"
+        PORT_NGINX: '8000'
+        NAME_STAGE: "build_prod"
+      when: always
+    - if: '$CI_COMMIT_REF_NAME == "dev"'
+      variables:
+        BRANCH: "app_dev"
+        PORT_NGINX: '8001'
+        NAME_STAGE: "build_dev"
+      when: always
+  script:
+    - ./run.sh
+
